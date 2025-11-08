@@ -6,14 +6,14 @@ import { UserProfile } from '../App';
 
 interface ProfileProps {
   userProfile: UserProfile;
-  isPro: boolean;
   onNavigate: (page: string) => void;
   onEditProfile: () => void;
   onLogout: () => void;
 }
 
-export function Profile({ userProfile, isPro, onNavigate, onEditProfile, onLogout }: ProfileProps) {
+export function Profile({ userProfile, onNavigate, onEditProfile, onLogout }: ProfileProps) {
   const profileFields = [
+    { icon: User, label: 'Name', value: userProfile.name || 'Not set' },
     { icon: User, label: 'Age', value: `${userProfile.age} years` },
     { icon: Ruler, label: 'Height', value: `${userProfile.height} cm` },
     { icon: Users, label: 'Gender', value: userProfile.gender },
@@ -48,13 +48,6 @@ export function Profile({ userProfile, isPro, onNavigate, onEditProfile, onLogou
             </div>
           )}
           
-          {isPro && (
-            <Badge className="bg-amber-500 text-slate-900 border-0 mb-2">
-              <Crown className="w-4 h-4 mr-1" />
-              Pro Member
-            </Badge>
-          )}
-          
           <h2 className="text-white">Your Style Profile</h2>
         </div>
       </div>
@@ -87,52 +80,6 @@ export function Profile({ userProfile, isPro, onNavigate, onEditProfile, onLogou
               </div>
             ))}
           </div>
-        </Card>
-      </div>
-
-      {/* Subscription Info */}
-      <div className="px-6 mb-8">
-        <Card className="p-6">
-          <div className="flex items-center justify-between mb-4">
-            <h3 className="text-slate-900">Subscription</h3>
-            {isPro && (
-              <Crown className="w-6 h-6 text-amber-600" />
-            )}
-          </div>
-          
-          {isPro ? (
-            <div>
-              <div className="flex items-center justify-between mb-4">
-                <div>
-                  <p className="mb-1 text-slate-900">Pro Plan</p>
-                  <p className="text-slate-600 text-sm">Unlimited access to all features</p>
-                </div>
-                <Badge className="bg-green-100 text-green-700 border-0">Active</Badge>
-              </div>
-              <div className="bg-amber-50 rounded-lg p-4 border border-amber-100">
-                <p className="text-sm text-slate-700">
-                  Next billing: ₹149 on November 18, 2025
-                </p>
-              </div>
-            </div>
-          ) : (
-            <div>
-              <div className="flex items-center justify-between mb-4">
-                <div>
-                  <p className="mb-1 text-slate-900">Free Plan</p>
-                  <p className="text-slate-600 text-sm">Limited features</p>
-                </div>
-                <Badge className="bg-slate-100 text-slate-700 border-0">Free</Badge>
-              </div>
-              <Button
-                onClick={() => onNavigate('subscription')}
-                className="w-full bg-gradient-to-r from-slate-900 to-amber-900 hover:opacity-90"
-              >
-                <Crown className="w-4 h-4 mr-2" />
-                Upgrade to Pro
-              </Button>
-            </div>
-          )}
         </Card>
       </div>
 

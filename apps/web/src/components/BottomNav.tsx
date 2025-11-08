@@ -3,10 +3,9 @@ import { Home, Shirt, Wand2, BookOpen, User, Crown } from 'lucide-react';
 interface BottomNavProps {
   currentPage: string;
   onNavigate: (page: string) => void;
-  isPro: boolean;
 }
 
-export function BottomNav({ currentPage, onNavigate, isPro }: BottomNavProps) {
+export function BottomNav({ currentPage, onNavigate }: BottomNavProps) {
   const navItems = [
     { id: 'dashboard', icon: Home, label: 'Home' },
     { id: 'wardrobe', icon: Shirt, label: 'Wardrobe' },
@@ -42,13 +41,6 @@ export function BottomNav({ currentPage, onNavigate, isPro }: BottomNavProps) {
           );
         })}
       </div>
-      
-      {isPro && (
-        <div className="absolute -top-10 left-1/2 -translate-x-1/2 bg-gradient-to-r from-yellow-400 to-orange-500 text-white px-4 py-1.5 rounded-full shadow-lg flex items-center gap-2 text-sm">
-          <Crown className="w-4 h-4" />
-          <span>Pro</span>
-        </div>
-      )}
     </div>
   );
 }

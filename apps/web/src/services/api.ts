@@ -26,10 +26,24 @@ export function ensureUserId(): string {
 
 async function request<T>(path: string, options?: RequestInit): Promise<T> {
   const token = getSavedIdToken();
-  const authHeader = token ? { Authorization: `Bearer ${token}` } : {};
+  const headers: Record<string, string> = { 
+    'Content-Type': 'application/json'
+  };
+  
+  // Add auth header if token exists
+  if (token) {
+    headers['Authorization'] = `Bearer ${token}`;
+  }
+  
+  // Merge with any additional headers from options
+  if (options?.headers) {
+    const optHeaders = options.headers as Record<string, string>;
+    Object.assign(headers, optHeaders);
+  }
+  
   const res = await fetch(`${API_BASE}${path}`, {
-    headers: { 'Content-Type': 'application/json', ...authHeader, ...(options?.headers || {}) },
     ...options,
+    headers,
   });
   if (!res.ok) {
     const text = await res.text();
@@ -68,6 +82,8 @@ export async function saveProfile(profile: any) {
 
 export type UserProfileResponse = {
   userId?: string;
+  name?: string;
+  age?: string | number;
   gender?: string;
   heightRange?: string;
   bodyType?: string;
@@ -76,7 +92,6 @@ export type UserProfileResponse = {
   region?: string;
   languagePref?: string;
   imageUrl?: string;
-  age?: string | number;
   error?: string;
 };
 

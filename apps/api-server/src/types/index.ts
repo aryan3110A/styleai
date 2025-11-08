@@ -1,5 +1,7 @@
 export interface UserProfile {
   userId: string;
+  name?: string;
+  age?: string;
   gender?: string;
   heightRange?: string;
   bodyType?: string;

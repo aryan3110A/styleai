@@ -10,7 +10,6 @@ import { ShopperAI } from "./components/ShopperAI";
 import { MakeupAI } from "./components/MakeupAI";
 import { FashionTips } from "./components/FashionTips";
 import { Profile } from "./components/Profile";
-import { Subscription } from "./components/Subscription";
 import { BottomNav } from "./components/BottomNav";
 import {
   ensureUserId,
@@ -26,6 +25,7 @@ import { Auth } from "./components/Auth";
 import { onAuthUserChanged } from "./services/auth";
 
 export type UserProfile = {
+  name: string;
   age: string;
   height: string;
   gender: string;
@@ -45,10 +45,9 @@ export default function App() {
   const [currentPage, setCurrentPage] = useState<string>("welcome");
   const [isAuthed, setIsAuthed] = useState<boolean>(false);
   const [userProfile, setUserProfile] = useState<UserProfile | null>(null);
-  const [isPro, setIsPro] = useState(false);
   const [wardrobeItems, setWardrobeItems] = useState<WardrobeItem[]>([]);
-  const [dailyPicks, setDailyPicks] = useState(2);
   const [showThankYou, setShowThankYou] = useState(false);
+  const [isLoadingProfile, setIsLoadingProfile] = useState(false);
 
   // Chat sessions state
   const [chatSessions, setChatSessions] = useState<ChatSession[]>([]);
@@ -56,28 +55,46 @@ export default function App() {
     string | null
   >(null);
 
-  // Reset daily picks at midnight
-  // Watch auth and keep token persisted (service handles localStorage)
+  // Watch auth state and load profile when authenticated
   useEffect(() => {
-    const unsub = onAuthUserChanged((u) => setIsAuthed(!!u));
+    const unsub = onAuthUserChanged(async (u) => {
+      setIsAuthed(!!u);
+      if (u) {
+        // User is authenticated, check if they have a profile
+        setIsLoadingProfile(true);
+        try {
+          const userId = ensureUserId();
+          const profileData = await getProfile(userId);
+          if (profileData && !profileData.error && profileData.name) {
+            // Profile exists and has required data
+            setUserProfile({
+              name: profileData.name,
+              age: profileData.age ? String(profileData.age) : "",
+              height: profileData.heightRange || "",
+              gender: profileData.gender || "",
+              bodyType: profileData.bodyType || "",
+              skinTone: profileData.skinTone || "",
+              photo: profileData.imageUrl,
+            });
+            setCurrentPage("dashboard");
+          } else {
+            // No profile or incomplete profile - send to setup
+            setCurrentPage("setup");
+          }
+        } catch (error) {
+          console.error("Error loading profile:", error);
+          setCurrentPage("setup");
+        } finally {
+          setIsLoadingProfile(false);
+        }
+      } else {
+        // User logged out
+        setUserProfile(null);
+        setCurrentPage("welcome");
+      }
+    });
     return () => unsub();
   }, []);
-
-  useEffect(() => {
-    const now = new Date();
-    const tomorrow = new Date(now);
-    tomorrow.setDate(tomorrow.getDate() + 1);
-    tomorrow.setHours(0, 0, 0, 0);
-    const timeUntilMidnight = tomorrow.getTime() - now.getTime();
-
-    const timer = setTimeout(() => {
-      if (!isPro) {
-        setDailyPicks(2);
-      }
-    }, timeUntilMidnight);
-
-    return () => clearTimeout(timer);
-  }, [isPro]);
 
   const handleSignup = () => {
     setShowThankYou(true);
@@ -101,10 +118,13 @@ export default function App() {
     try {
       await saveProfile({
         userId,
+        name: profile.name,
+        age: profile.age,
         gender: profile.gender,
         heightRange: profile.height,
         bodyType: profile.bodyType,
         skinTone: profile.skinTone,
+        imageUrl: profile.photo,
       });
     } catch {}
     setUserProfile(profile);
@@ -114,9 +134,7 @@ export default function App() {
   const handleLogout = () => {
     if (confirm("Are you sure you want to log out?")) {
       setUserProfile(null);
-      setIsPro(false);
       setWardrobeItems([]);
-      setDailyPicks(2);
       setChatSessions([]);
       setCurrentChatSessionId(null);
       setCurrentPage("welcome");
@@ -202,10 +220,10 @@ export default function App() {
 
   // Initialize chat session when user navigates to chat page
   useEffect(() => {
-    if (currentPage === "chat" && isPro && chatSessions.length === 0) {
+    if (currentPage === "chat" && chatSessions.length === 0) {
       createNewChatSession();
     }
-  }, [currentPage, isPro]);
+  }, [currentPage]);
 
   const handleAddWardrobeItem = async (item: WardrobeItem) => {
     const userId = ensureUserId();
@@ -237,10 +255,6 @@ export default function App() {
     setWardrobeItems(wardrobeItems.filter((item) => item.id !== id));
   };
 
-  const handleUpgradeToPro = () => {
-    setIsPro(true);
-    setCurrentPage("dashboard");
-  };
   // Initial fetch of profile and wardrobe
   useEffect(() => {
     const userId = ensureUserId();
@@ -249,6 +263,7 @@ export default function App() {
         const p = await getProfile(userId);
         if (p && typeof p === "object" && !("error" in p)) {
           const mapped: UserProfile = {
+            name: p.name || "",
             age: (p.age || "").toString(),
             height: p.heightRange || "",
             gender: p.gender || "",
@@ -319,16 +334,6 @@ export default function App() {
     }
   }, [currentPage]);
 
-  const handleGenerateOutfit = () => {
-    if (!isPro && dailyPicks <= 0) {
-      return false;
-    }
-    if (!isPro) {
-      setDailyPicks(dailyPicks - 1);
-    }
-    return true;
-  };
-
   if (showThankYou) {
     return (
       <div className="min-h-screen bg-gradient-to-br from-slate-900 via-rose-900 to-amber-900 flex items-center justify-center">
@@ -378,7 +383,6 @@ export default function App() {
             {currentPage === "dashboard" && (
               <Dashboard
                 userProfile={userProfile!}
-                isPro={isPro}
                 wardrobeCount={wardrobeItems.length}
                 onNavigate={setCurrentPage}
               />
@@ -387,7 +391,6 @@ export default function App() {
             {currentPage === "wardrobe" && (
               <Wardrobe
                 items={wardrobeItems}
-                isPro={isPro}
                 onAddItem={handleAddWardrobeItem}
                 onDeleteItem={handleDeleteWardrobeItem}
                 onNavigate={setCurrentPage}
@@ -397,16 +400,12 @@ export default function App() {
             {currentPage === "assist" && (
               <WardrobeAssist
                 wardrobeItems={wardrobeItems}
-                isPro={isPro}
-                dailyPicks={dailyPicks}
-                onGenerate={handleGenerateOutfit}
                 onNavigate={setCurrentPage}
               />
             )}
 
             {currentPage === "chat" && (
               <AIChatbot
-                isPro={isPro}
                 onNavigate={setCurrentPage}
                 chatSessions={chatSessions}
                 currentSessionId={currentChatSessionId}
@@ -432,25 +431,15 @@ export default function App() {
             {currentPage === "profile" && (
               <Profile
                 userProfile={userProfile!}
-                isPro={isPro}
                 onNavigate={setCurrentPage}
                 onEditProfile={handleEditProfile}
                 onLogout={handleLogout}
               />
             )}
 
-            {currentPage === "subscription" && (
-              <Subscription
-                isPro={isPro}
-                onUpgrade={handleUpgradeToPro}
-                onNavigate={setCurrentPage}
-              />
-            )}
-
             <BottomNav
               currentPage={currentPage}
               onNavigate={setCurrentPage}
-              isPro={isPro}
             />
           </>
         )}

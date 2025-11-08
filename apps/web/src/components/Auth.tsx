@@ -30,8 +30,12 @@ export function Auth({ onAuthenticated }: AuthProps) {
     setError(null);
     setLoading(true);
     try {
-      if (mode === "signup") await signUpWithEmail(email, password);
-      else await signInWithEmail(email, password);
+      if (mode === "signup") {
+        await signUpWithEmail(email, password);
+        // For new signups, we'll let onAuthenticated handle the flow to profile setup
+      } else {
+        await signInWithEmail(email, password);
+      }
       onAuthenticated();
     } catch (e: any) {
       setError(e?.message || "Authentication failed");

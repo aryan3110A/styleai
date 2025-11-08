@@ -32,7 +32,6 @@ export interface ChatSession {
 }
 
 interface AIChatbotProps {
-  isPro: boolean;
   onNavigate: (page: string) => void;
   chatSessions: ChatSession[];
   currentSessionId: string | null;
@@ -43,7 +42,6 @@ interface AIChatbotProps {
 }
 
 export function AIChatbot({
-  isPro,
   onNavigate,
   chatSessions,
   currentSessionId,
@@ -143,81 +141,6 @@ export function AIChatbot({
     if (diffDays < 7) return `${diffDays}d ago`;
     return new Date(date).toLocaleDateString();
   };
-
-  if (!isPro) {
-    return (
-      <div className="pb-24 min-h-screen bg-stone-50">
-        <div className="bg-white border-b">
-          <div className="px-6 py-4 flex items-center gap-3">
-            <button onClick={() => onNavigate("dashboard")}>
-              <ArrowLeft className="w-6 h-6 text-slate-700" />
-            </button>
-            <div>
-              <h1 className="text-slate-900">AI Fashion Chat</h1>
-              <p className="text-slate-600 text-sm">Premium Feature</p>
-            </div>
-          </div>
-        </div>
-
-        <div className="px-6 py-12">
-          <div className="max-w-md mx-auto text-center">
-            <div className="w-24 h-24 bg-gradient-to-br from-amber-500 to-amber-600 rounded-full flex items-center justify-center mx-auto mb-6">
-              <Crown className="w-12 h-12 text-slate-900" />
-            </div>
-            <h2 className="mb-3 text-slate-900">Pro Feature</h2>
-            <p className="text-slate-600 mb-8">
-              Unlock unlimited conversations with your personal AI fashion
-              stylist. Get instant advice, outfit suggestions, and styling tips
-              whenever you need them.
-            </p>
-            <div className="bg-gradient-to-br from-stone-50 to-amber-50 rounded-2xl p-6 mb-8 border border-amber-100">
-              <h3 className="mb-4 text-slate-900">What you'll get with Pro:</h3>
-              <ul className="space-y-3 text-left">
-                <li className="flex items-start gap-3">
-                  <Sparkles className="w-5 h-5 text-amber-700 shrink-0 mt-0.5" />
-                  <span className="text-slate-700">
-                    Unlimited AI chat conversations
-                  </span>
-                </li>
-                <li className="flex items-start gap-3">
-                  <Sparkles className="w-5 h-5 text-amber-700 shrink-0 mt-0.5" />
-                  <span className="text-slate-700">
-                    Chat history and saved conversations
-                  </span>
-                </li>
-                <li className="flex items-start gap-3">
-                  <Sparkles className="w-5 h-5 text-amber-700 shrink-0 mt-0.5" />
-                  <span className="text-slate-700">
-                    Personalized styling advice
-                  </span>
-                </li>
-                <li className="flex items-start gap-3">
-                  <Sparkles className="w-5 h-5 text-amber-700 shrink-0 mt-0.5" />
-                  <span className="text-slate-700">
-                    Event-specific outfit recommendations
-                  </span>
-                </li>
-                <li className="flex items-start gap-3">
-                  <Sparkles className="w-5 h-5 text-amber-700 shrink-0 mt-0.5" />
-                  <span className="text-slate-700">
-                    Fashion trends and tips
-                  </span>
-                </li>
-              </ul>
-            </div>
-            <Button
-              onClick={() => onNavigate("subscription")}
-              size="lg"
-              className="bg-gradient-to-r from-slate-900 to-amber-900 hover:opacity-90 text-white px-8"
-            >
-              <Crown className="w-5 h-5 mr-2" />
-              Upgrade to Pro
-            </Button>
-          </div>
-        </div>
-      </div>
-    );
-  }
 
   return (
     <div className="pb-24 min-h-screen bg-stone-50 flex flex-col relative">

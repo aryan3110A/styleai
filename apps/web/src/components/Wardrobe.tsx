@@ -10,19 +10,17 @@ import { WardrobeItem } from '../App';
 
 interface WardrobeProps {
   items: WardrobeItem[];
-  isPro: boolean;
   onAddItem: (item: WardrobeItem) => void;
   onDeleteItem: (id: string) => void;
   onNavigate: (page: string) => void;
 }
 
-export function Wardrobe({ items, isPro, onAddItem, onDeleteItem, onNavigate }: WardrobeProps) {
+export function Wardrobe({ items, onAddItem, onDeleteItem, onNavigate }: WardrobeProps) {
   const [isDialogOpen, setIsDialogOpen] = useState(false);
   const [newItem, setNewItem] = useState({ category: '', name: '', image: '' });
   const [imagePreview, setImagePreview] = useState('');
 
-  const maxItems = isPro ? Infinity : 10;
-  const canAddMore = items.length < maxItems;
+  const canAddMore = true;
 
   const categories = [
     'Shirts',
@@ -79,16 +77,14 @@ export function Wardrobe({ items, isPro, onAddItem, onDeleteItem, onNavigate }: 
           <div className="flex items-center gap-3">
             <button onClick={() => onNavigate('dashboard')}>
               <ArrowLeft className="w-6 h-6 text-gray-700" />
-            </button>
-            <div>
-              <h1>Digital Wardrobe</h1>
-              <p className="text-gray-600 text-sm">
-                {items.length} {isPro ? 'items' : `of ${maxItems} items`}
-              </p>
-            </div>
+          </button>
+          <div>
+            <h1>Digital Wardrobe</h1>
+            <p className="text-gray-600 text-sm">
+              {items.length} items
+            </p>
           </div>
-
-          {canAddMore ? (
+        </div>          {canAddMore ? (
             <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
               <DialogTrigger asChild>
                 <Button size="sm" className="bg-purple-600 hover:bg-purple-700">
@@ -182,16 +178,7 @@ export function Wardrobe({ items, isPro, onAddItem, onDeleteItem, onNavigate }: 
                 </div>
               </DialogContent>
             </Dialog>
-          ) : (
-            <Button
-              size="sm"
-              onClick={() => onNavigate('subscription')}
-              className="bg-yellow-500 hover:bg-yellow-600"
-            >
-              <Crown className="w-4 h-4 mr-2" />
-              Upgrade for More
-            </Button>
-          )}
+          ) : null}
         </div>
       </div>
 

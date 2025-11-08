@@ -16,14 +16,12 @@ import { ImageWithFallback } from "./figma/ImageWithFallback";
 
 interface DashboardProps {
   userProfile: UserProfile;
-  isPro: boolean;
   wardrobeCount: number;
   onNavigate: (page: string) => void;
 }
 
 export function Dashboard({
   userProfile,
-  isPro,
   wardrobeCount,
   onNavigate,
 }: DashboardProps) {
@@ -49,10 +47,9 @@ export function Dashboard({
     {
       icon: MessageCircle,
       title: "AI Fashion Chat",
-      description: isPro ? "Unlimited access" : "Pro feature",
+      description: "Get personalized advice",
       color: "bg-amber-100 text-amber-800",
       page: "chat",
-      requiresPro: true,
     },
     {
       icon: ShoppingBag,
@@ -85,22 +82,6 @@ export function Dashboard({
             <p className="text-white/80 mb-1">Hello there!</p>
             <h1 className="text-white">{greeting()}</h1>
           </div>
-
-          {isPro ? (
-            <Badge className="bg-amber-500 text-slate-900 border-0 px-3 py-1.5">
-              <Crown className="w-4 h-4 mr-1" />
-              Pro
-            </Badge>
-          ) : (
-            <Button
-              onClick={() => onNavigate("subscription")}
-              size="sm"
-              variant="secondary"
-              className="bg-amber-100/20 hover:bg-amber-100/30 text-white border-0"
-            >
-              Upgrade to Pro
-            </Button>
-          )}
         </div>
 
         <div className="relative z-10">
@@ -119,7 +100,7 @@ export function Dashboard({
       {/* Quick Stats */}
       <div className="px-6 -mt-20 relative z-10 mb-8">
         <Card className="p-6 bg-white shadow-lg">
-          <div className="grid grid-cols-3 gap-4">
+          <div className="grid grid-cols-2 gap-4">
             <div className="text-center">
               <div className="text-slate-900 mb-1">
                 {wardrobeCount}
@@ -128,19 +109,13 @@ export function Dashboard({
                 Wardrobe Items
               </p>
             </div>
-            <div className="text-center border-x border-slate-200">
-              <div className="text-rose-800 mb-1">
-                {isPro ? "∞" : "2"}
+            <div className="text-center border-l border-slate-200">
+              <div className="text-amber-800 mb-1">
+                ∞
               </div>
               <p className="text-slate-600 text-sm">
                 Daily Picks
               </p>
-            </div>
-            <div className="text-center">
-              <div className="text-amber-800 mb-1">
-                {isPro ? "Pro" : "Free"}
-              </div>
-              <p className="text-slate-600 text-sm">Plan</p>
             </div>
           </div>
         </Card>
@@ -157,20 +132,8 @@ export function Dashboard({
             <Card
               key={index}
               className="p-5 hover:shadow-lg transition-shadow cursor-pointer relative"
-              onClick={() => {
-                if (feature.requiresPro && !isPro) {
-                  onNavigate("subscription");
-                } else {
-                  onNavigate(feature.page);
-                }
-              }}
+              onClick={() => onNavigate(feature.page)}
             >
-              {feature.requiresPro && !isPro && (
-                <div className="absolute top-2 right-2">
-                  <Crown className="w-4 h-4 text-yellow-500" />
-                </div>
-              )}
-
               <div
                 className={`w-12 h-12 rounded-xl flex items-center justify-center mb-4 ${feature.color}`}
               >
@@ -222,35 +185,6 @@ export function Dashboard({
           </div>
         </div>
       </div>
-
-      {/* Upgrade Banner */}
-      {!isPro && (
-        <div className="px-6 mt-8">
-          <div
-            className="bg-gradient-to-r from-slate-900 to-amber-900 rounded-2xl p-6 text-white cursor-pointer shadow-lg"
-            onClick={() => onNavigate("subscription")}
-          >
-            <div className="flex items-start justify-between mb-3">
-              <div>
-                <h3 className="text-white mb-2">
-                  Upgrade to Pro
-                </h3>
-                <p className="text-white/90 text-sm mb-3">
-                  Unlock unlimited AI features, wardrobe
-                  storage, and personalized styling
-                </p>
-              </div>
-              <Crown className="w-8 h-8 text-amber-300" />
-            </div>
-            <Button
-              size="sm"
-              className="bg-amber-100 text-slate-900 hover:bg-amber-200"
-            >
-              Get Pro for ₹149/month
-            </Button>
-          </div>
-        </div>
-      )}
     </div>
   );
 }

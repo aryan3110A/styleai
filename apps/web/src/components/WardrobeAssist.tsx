@@ -6,23 +6,14 @@ import { WardrobeItem } from '../App';
 
 interface WardrobeAssistProps {
   wardrobeItems: WardrobeItem[];
-  isPro: boolean;
-  dailyPicks: number;
-  onGenerate: () => boolean;
   onNavigate: (page: string) => void;
 }
 
-export function WardrobeAssist({ wardrobeItems, isPro, dailyPicks, onGenerate, onNavigate }: WardrobeAssistProps) {
+export function WardrobeAssist({ wardrobeItems, onNavigate }: WardrobeAssistProps) {
   const [generatedOutfit, setGeneratedOutfit] = useState<WardrobeItem[]>([]);
   const [isGenerating, setIsGenerating] = useState(false);
 
   const generateOutfit = () => {
-    const canGenerate = onGenerate();
-    
-    if (!canGenerate) {
-      return;
-    }
-
     setIsGenerating(true);
     
     // Simulate AI processing
@@ -46,27 +37,6 @@ export function WardrobeAssist({ wardrobeItems, isPro, dailyPicks, onGenerate, o
           <div>
             <h1 className="text-white">Wardrobe Assist</h1>
             <p className="text-white/80 text-sm">AI-powered outfit suggestions</p>
-          </div>
-        </div>
-
-        <div className="bg-white/10 backdrop-blur-sm rounded-2xl p-4">
-          <div className="flex items-center justify-between">
-            <div>
-              <p className="text-white/80 text-sm mb-1">
-                {isPro ? 'Unlimited Picks' : `Daily Picks Remaining`}
-              </p>
-              <p className="text-white text-2xl">{isPro ? '∞' : dailyPicks}</p>
-            </div>
-            {!isPro && (
-              <Button
-                size="sm"
-                onClick={() => onNavigate('subscription')}
-                className="bg-yellow-500 hover:bg-yellow-600 text-white border-0"
-              >
-                <Crown className="w-4 h-4 mr-2" />
-                Go Pro
-              </Button>
-            )}
           </div>
         </div>
       </div>
@@ -103,7 +73,7 @@ export function WardrobeAssist({ wardrobeItems, isPro, dailyPicks, onGenerate, o
                 </p>
                 <Button
                   onClick={generateOutfit}
-                  disabled={(!isPro && dailyPicks <= 0) || isGenerating}
+                  disabled={isGenerating}
                   size="lg"
                   className="bg-gradient-to-r from-pink-600 to-purple-600 hover:from-pink-700 hover:to-purple-700 text-white px-8"
                 >
@@ -119,11 +89,6 @@ export function WardrobeAssist({ wardrobeItems, isPro, dailyPicks, onGenerate, o
                     </>
                   )}
                 </Button>
-                {!isPro && dailyPicks <= 0 && (
-                  <p className="text-gray-600 text-sm mt-4">
-                    You've used all your daily picks. Upgrade to Pro for unlimited access.
-                  </p>
-                )}
               </div>
             )}
 
@@ -137,7 +102,7 @@ export function WardrobeAssist({ wardrobeItems, isPro, dailyPicks, onGenerate, o
                   </div>
                   <Button
                     onClick={generateOutfit}
-                    disabled={(!isPro && dailyPicks <= 0) || isGenerating}
+                    disabled={isGenerating}
                     size="sm"
                     variant="outline"
                   >

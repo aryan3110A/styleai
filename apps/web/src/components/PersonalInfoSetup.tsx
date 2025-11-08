@@ -25,6 +25,7 @@ export function PersonalInfoSetup({
 }: PersonalInfoSetupProps) {
   const [formData, setFormData] = useState<UserProfile>(
     initialProfile || {
+      name: "",
       age: "",
       height: "",
       gender: "",
@@ -54,6 +55,7 @@ export function PersonalInfoSetup({
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (
+      !formData.name ||
       !formData.age ||
       !formData.height ||
       !formData.gender ||
@@ -71,6 +73,8 @@ export function PersonalInfoSetup({
     }
     const payload = {
       userId,
+      name: formData.name,
+      age: formData.age,
       gender: formData.gender,
       heightRange: formData.height,
       bodyType: formData.bodyType,
@@ -84,6 +88,7 @@ export function PersonalInfoSetup({
   };
 
   const isFormValid =
+    formData.name &&
     formData.age &&
     formData.height &&
     formData.gender &&
@@ -142,6 +147,24 @@ export function PersonalInfoSetup({
                   />
                 </label>
               </div>
+            </div>
+
+            {/* Name */}
+            <div>
+              <Label htmlFor="name" className="flex items-center gap-2 mb-3">
+                <User className="w-4 h-4" />
+                Full Name
+              </Label>
+              <Input
+                id="name"
+                type="text"
+                placeholder="Enter your full name"
+                value={formData.name}
+                onChange={(e) =>
+                  setFormData({ ...formData, name: e.target.value })
+                }
+                required
+              />
             </div>
 
             {/* Age */}
