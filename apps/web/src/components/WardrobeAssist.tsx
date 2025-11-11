@@ -54,6 +54,69 @@ export const WardrobeAssist: React.FC<WardrobeAssistProps> = ({
     matchedIds?: string[];
   }>({});
 
+  // Persist assistant state so navigating away and back restores the last
+  // question and generated output. We use sessionStorage so the state is
+  // per-tab and survives in-app navigation.
+  const STORAGE_KEY = "wardrobe_assist_state_v1";
+
+  const loadPersistedState = () => {
+    try {
+      const raw = sessionStorage.getItem(STORAGE_KEY);
+      if (!raw) return;
+      const parsed = JSON.parse(raw);
+      if (parsed.prompt) setPrompt(parsed.prompt);
+      if (Array.isArray(parsed.generatedOutfits))
+        setGeneratedOutfits(parsed.generatedOutfits);
+      if (parsed.replyText) setReplyText(parsed.replyText);
+      if (parsed.explain) setExplain(parsed.explain);
+      if (Array.isArray(parsed.followUps)) setFollowUps(parsed.followUps);
+      if (Array.isArray(parsed.alternatives))
+        setAlternatives(parsed.alternatives);
+      if (parsed.showAlternatives) setShowAlternatives(true);
+      if (Array.isArray(parsed.history)) setHistory(parsed.history);
+      if (parsed.isLastFromHistory) setIsLastFromHistory(true);
+      if (parsed.debugInfo) setDebugInfo(parsed.debugInfo);
+    } catch (e) {
+      // ignore parse errors
+    }
+  };
+
+  const persistState = () => {
+    try {
+      const toSave = {
+        prompt,
+        generatedOutfits,
+        replyText,
+        explain,
+        followUps,
+        alternatives,
+        showAlternatives,
+        history,
+        isLastFromHistory,
+        debugInfo,
+      };
+      sessionStorage.setItem(STORAGE_KEY, JSON.stringify(toSave));
+    } catch (e) {
+      // ignore storage errors
+    }
+  };
+
+  // Persist state whenever key values change so navigating away/back restores
+  useEffect(() => {
+    persistState();
+  }, [
+    prompt,
+    generatedOutfits,
+    replyText,
+    explain,
+    followUps,
+    alternatives,
+    showAlternatives,
+    history,
+    isLastFromHistory,
+    debugInfo,
+  ]);
+
   const generateOutfit = async (customPrompt?: string) => {
     setIsGenerating(true);
     setExplain(null);
@@ -68,12 +131,22 @@ export const WardrobeAssist: React.FC<WardrobeAssistProps> = ({
         .map((w) => `${w.id}: ${w.name} (${w.category})`)
         .join("\n");
 
-      // Decide reply language based on user prompt (simple heuristic)
+      // Decide reply language based on user prompt using a more robust heuristic:
+      // 1) If Devanagari characters present => Hinglish/Hindi
+      // 2) Otherwise count hits for common English words vs romanized Hindi (Hinglish) tokens
+      //    and pick the higher-scoring language. If both are low, default to English.
       const detectPreferredLanguage = (text: string) => {
         if (!text) return "english";
         // If Devanagari characters present, prefer Hinglish/Hindi
-        if (/[\u0900-\u097F]/.test(text)) return "hinglish";
-        // Common Romanized Hindi / Hinglish tokens (cover more informal/romanized variants)
+        try {
+          if (/\p{Script=Devanagari}/u.test(text)) return "hinglish";
+        } catch (e) {
+          // Fallback for environments without full unicode support
+          if (/[\u0900-\u097F]/.test(text)) return "hinglish";
+        }
+
+        const low = text.toLowerCase();
+
         const hinglishTokens = [
           "hai",
           "hota",
@@ -87,7 +160,6 @@ export const WardrobeAssist: React.FC<WardrobeAssistProps> = ({
           "chaiye",
           "kuch",
           "toh",
-          // removed ambiguous token 'to' (matches English 'to' and caused false positives)
           "aur",
           "ke",
           "ka",
@@ -102,13 +174,75 @@ export const WardrobeAssist: React.FC<WardrobeAssistProps> = ({
           "rahi",
           "karo",
           "maja",
+          "kya",
+          "liye",
+          "liye",
         ];
-        const low = text.toLowerCase();
+
+        const englishTokens = [
+          "the",
+          "is",
+          "are",
+          "what",
+          "should",
+          "for",
+          "i",
+          "you",
+          "my",
+          "would",
+          "will",
+          "please",
+          "do",
+          "does",
+          "did",
+          "can",
+          "could",
+          "wear",
+          "outfit",
+          "pick",
+          "want",
+          "like",
+          "help",
+        ];
+
+        let hinglishCount = 0;
+        let englishCount = 0;
+
+        // Count token matches with word boundaries to reduce false positives
         for (const t of hinglishTokens) {
-          // match token boundaries or common concatenations
+          const re = new RegExp(`(^|\\s)${t}($|\\s|[.!?,])`, "i");
+          if (re.test(low)) hinglishCount += 1;
+        }
+        for (const t of englishTokens) {
+          const re = new RegExp(`(^|\\s)${t}($|\\s|[.!?,])`, "i");
+          if (re.test(low)) englishCount += 1;
+        }
+
+        // Strong Hinglish override: some tokens (e.g., 'chaiye','kya','kaise') are
+        // highly indicative of a Hinglish/Hindi request even when mixed with
+        // English words like 'date' or 'outfit'. If present, prefer Hinglish.
+        const strongHinglish = [
+          "chaiye",
+          "chahiye",
+          "kya",
+          "kaise",
+          "kab",
+          "krna",
+          "karna",
+          "kar",
+          "dega",
+          "de",
+          "dekh",
+          "dikh",
+          "dikhna",
+        ];
+        for (const t of strongHinglish) {
           const re = new RegExp(`(^|\\s)${t}($|\\s|[.!?,])`, "i");
           if (re.test(low)) return "hinglish";
         }
+
+        // If either side has a clear lead, pick that. Otherwise default to English.
+        if (hinglishCount > englishCount) return "hinglish";
         return "english";
       };
 
@@ -1102,9 +1236,21 @@ export const WardrobeAssist: React.FC<WardrobeAssistProps> = ({
     return result.slice(0, maxItems);
   };
 
-  // On mount: restore last wardrobe-mode chat if present so the same suggestions persist across navigation
+  // On mount: restore persisted assistant state (if present) so generated
+  // output and the user's prompt persist across in-app navigation. If no
+  // persisted state exists, fall back to restoring the most recent
+  // wardrobe-mode chat from the server.
   useEffect(() => {
     let mounted = true;
+    const raw = sessionStorage.getItem(STORAGE_KEY);
+    if (raw) {
+      // If we have a persisted state, restore it and skip server restore.
+      loadPersistedState();
+      return () => {
+        mounted = false;
+      };
+    }
+
     const restore = async () => {
       try {
         const userId = ensureUserId();
@@ -1384,14 +1530,14 @@ export const WardrobeAssist: React.FC<WardrobeAssistProps> = ({
 
             {isGenerating ? (
               <div className="p-6 py-14 h-20">
-                <div className="border rounded-lg p-10 min-h-40 py-20 bg-white flex items-center justify-center">
+                {/* <div className="border rounded-lg p-10 min-h-40 py-20 bg-white flex items-center justify-center">
                   <div className="flex flex-col items-center gap-4">
                     <div className="w-10 h-10 border-4 border-slate-300 rounded-full animate-spin" />
                     <div className="text-sm text-slate-600 font-medium">
                       Generating outfit…
                     </div>
                   </div>
-                </div>
+                </div> */}
               </div>
             ) : (
               generatedOutfits.length > 0 && (

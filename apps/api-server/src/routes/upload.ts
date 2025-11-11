@@ -17,7 +17,11 @@ router.post('/profile-photo', async (req: AuthedRequest, res, next) => {
     const path = `uploads/${uid}/profile-${Date.now()}.png`;
     const url = await uploadBufferToStorage(path, buffer, 'image/png');
 
-    await db.collection('profiles').doc(uid).set({ imageUrl: url }, { merge: true });
+    // Also persist uid and email if available so the profile doc always has
+    // the mandatory email field once the user is authenticated.
+    const patch: any = { imageUrl: url, userId: uid };
+    if (req.user && (req.user as any).email) patch.email = (req.user as any).email;
+    await db.collection('profiles').doc(uid).set(patch, { merge: true });
     res.json({ success: true, url });
   } catch (err) {
     next(err);

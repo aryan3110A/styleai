@@ -9,9 +9,15 @@ import chatRouter from './routes/chat';
 import imageRouter from './routes/image';
 import profileRouter from './routes/profile';
 import wardrobeRouter from './routes/wardrobe';
+import accountRouter from './routes/account';
 import uploadRouter from './routes/upload';
 
 const app = express();
+// When running behind proxies or in some deployment environments, the
+// client IP is provided via the X-Forwarded-For header. Enable trust proxy
+// so Express populates req.ip from that header when present. This prevents
+// some rate-limiters from seeing an undefined ip value.
+app.set('trust proxy', true);
 app.use(cors());
 
 // Parse JSON bodies
@@ -31,6 +37,10 @@ app.use('/api/chat', chatRouter);
 
 app.use('/api/image', imageRouter);
 app.use('/api/upload', uploadRouter);
+
+// Account linking endpoint - used to migrate legacy local user ids into the
+// authenticated Firebase UID (copies profile, wardrobe, chats)
+app.use('/api/account', accountRouter);
 
 app.use(errorHandler);
 

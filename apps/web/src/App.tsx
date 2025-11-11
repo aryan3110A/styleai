@@ -24,7 +24,8 @@ import {
   createChat,
 } from "./services/api";
 import { Auth } from "./components/Auth";
-import { onAuthUserChanged, signOutUser } from "./services/auth";
+import { onAuthUserChanged, signOutUser, getSavedUid } from "./services/auth";
+import { linkAccount } from "./services/api";
 
 export type UserProfile = {
   name: string;
@@ -36,6 +37,8 @@ export type UserProfile = {
   photo?: string;
   region?: string;
   favouriteColours?: string[];
+  email?: string;
+  languagePref?: string;
 };
 
 export type WardrobeItem = {
@@ -80,97 +83,66 @@ const parseTimestamp = (value: any): Date => {
 export default function App() {
   const [currentPage, setCurrentPage] = useState<string>("welcome");
   const [isAuthed, setIsAuthed] = useState<boolean>(false);
+  // True after the first onAuthUserChanged callback fires. We use this to
+  // avoid redirecting to SignIn during the initial hydration window while
+  // Firebase restores the persisted session.
+  const [authHydrated, setAuthHydrated] = useState<boolean>(false);
   const [authInitialMode, setAuthInitialMode] = useState<"signin" | "signup">(
     "signin"
   );
-  // When user clicks "Get Started" from the welcome page we want to show
-  // the Auth UI even if a persisted user is present. Use a ref to signal
-  // the auth listener to avoid immediately redirecting an already-signed-in
-  // user away from the auth page.
-  const forceShowAuthRef = useRef<boolean>(false);
-  // Track whether the auth system has finished its initial check on mount.
-  // While this is false, we avoid redirecting the UI to the auth page and
-  // show a short loading placeholder so the app doesn't flash SignIn on refresh.
-  const [authInitialized, setAuthInitialized] = useState<boolean>(false);
   const [userProfile, setUserProfile] = useState<UserProfile | null>(null);
   const [wardrobeItems, setWardrobeItems] = useState<WardrobeItem[]>([]);
   const [isLoadingWardrobe, setIsLoadingWardrobe] = useState<boolean>(false);
   const [showThankYou, setShowThankYou] = useState(false);
   const [isLoadingProfile, setIsLoadingProfile] = useState(false);
-  const previousAuthStateRef = useRef<boolean>(false);
-  const authInitializedRef = useRef<boolean>(false);
-  const currentPageRef = useRef<string>(currentPage);
+  // Temporary overlay when user clicks Get Started and they're already
+  // authenticated — we skip the Auth page and show a loading screen until
+  // dashboard data is ready.
+  const [showLaunchLoading, setShowLaunchLoading] = useState(false);
+  const initialAuthHandledRef = useRef(false);
 
-  useEffect(() => {
-    currentPageRef.current = currentPage;
-  }, [currentPage]);
-
-  // Chat sessions state
   const [chatSessions, setChatSessions] = useState<ChatSession[]>([]);
   const [currentChatSessionId, setCurrentChatSessionId] = useState<
     string | null
   >(null);
   const [isLoadingChats, setIsLoadingChats] = useState<boolean>(false);
 
-  // Watch auth state and load profile when authenticated
+  // A simple ref to remember whether the user just performed a signup or signin
+  // so we can decide whether to show ProfileSetup (only after signup).
+  const lastAuthActionRef = useRef<"signin" | "signup" | null>(null);
+  // When user clicks Get Started, set this so the auth flow knows the user
+  // explicitly requested the Auth UI (prevents auto-redirect on initial hydration).
+  const forceShowAuthRef = useRef<boolean>(false);
+  // Track previous auth state so we only auto-redirect after a *new* login.
+  // If the user was already authenticated and manually navigates to the auth
+  // page (e.g. via "Get Started Free" wanting to view sign-in), we avoid
+  // bouncing them immediately to the dashboard.
+  const prevAuthedRef = useRef<boolean>(false);
+
   useEffect(() => {
-    // Subscribe once on mount. We use a ref (`currentPageRef`) to read the
-    // latest page inside the callback without re-subscribing on every page
-    // change. Re-subscribing caused a race where setting `currentPage("auth")`
-    // from the welcome screen would immediately be overwritten by the
-    // listener's initial callback when the user was unauthenticated.
     const unsub = onAuthUserChanged(async (u) => {
-      // If the URL explicitly requested the Auth screen (for example when
-      // the welcome "Get Started" flow appends `?forceAuth=true`), set the
-      // ref so this listener will respect the user's intent and avoid
-      // redirecting an already-authenticated user away from the Auth UI.
-      try {
-        if (
-          typeof window !== "undefined" &&
-          window.location.search.includes("forceAuth=true")
-        ) {
-          forceShowAuthRef.current = true;
-        }
-      } catch (e) {
-        // ignore
-      }
+      // Mark that we've received the initial callback at least once
+      const wasInitial = !initialAuthHandledRef.current;
+      if (wasInitial) initialAuthHandledRef.current = true;
 
-      // Detect whether this is the initial callback fired during app
-      // initialization. The first call should not be treated as a "just
-      // authenticated" sign-in event (it is the hydration of persisted auth).
-      const isInitial = !authInitializedRef.current;
-      if (isInitial) {
-        authInitializedRef.current = true;
-        setAuthInitialized(true);
-      }
-
-      // If the user explicitly requested the Auth screen from the Welcome
-      // flow (forceShowAuthRef), avoid changing the current page here so the
-      // user remains on the Sign-in UI even if a persisted user exists.
-      // Still update auth flags but return early to prevent any redirect.
-      if (forceShowAuthRef.current) {
-        // Respect the user's intent to view the Auth UI from Welcome.
-        // Update auth flags but avoid any page redirects here.
-        setIsAuthed(!!u);
-        previousAuthStateRef.current = !!u;
-        return;
-      }
-
-      const wasAuthenticated = previousAuthStateRef.current;
-      // Only consider a transition a "justAuthenticated" event if it's not
-      // the initial hydration callback. This prevents redirecting to the
-      // dashboard on page refresh when a persisted user is detected.
-      const justAuthenticated = !wasAuthenticated && !!u && !isInitial;
-
-      setIsAuthed(!!u);
-      previousAuthStateRef.current = !!u;
+      const isNowAuthed = !!u;
+      const wasAuthedBefore = prevAuthedRef.current;
+      prevAuthedRef.current = isNowAuthed;
+      setIsAuthed(isNowAuthed);
+      if (!authHydrated) setAuthHydrated(true);
 
       if (u) {
-        // User is authenticated, check if they have a profile
+        // If we have a legacy local user id (created prior to authentication)
+        // attempt to link it into the authenticated Firebase UID so the
+        // user's old profile/wardrobe data becomes available under their
+        // authenticated account.
+        // No longer link legacy ids automatically; new accounts always use Firebase UID.
+        // Fetch profile but only redirect depending on context.
         setIsLoadingProfile(true);
         try {
           const userId = ensureUserId();
           const profileData = await getProfile(userId);
+
           if (profileData && !profileData.error && profileData.name) {
             setUserProfile({
               name: profileData.name,
@@ -180,83 +152,65 @@ export default function App() {
               bodyType: profileData.bodyType || "",
               skinTone: profileData.skinTone || "",
               photo: profileData.imageUrl,
+              email: (profileData as any).email || undefined,
+              languagePref: (profileData as any).languagePref || undefined,
+              favouriteColours: (profileData as any).favouriteColours || [],
+              region: (profileData as any).region || "",
             });
-            // Only redirect to dashboard when the user truly just signed in
-            // or when they were explicitly on the auth/setup flow. Avoid
-            // changing the user's current page during the initial auth
-            // hydration on refresh.
-            if (
-              (justAuthenticated ||
-                currentPageRef.current === "auth" ||
-                currentPageRef.current === "setup") &&
-              !forceShowAuthRef.current
-            ) {
-              setCurrentPage("dashboard");
+
+            // Redirect rules:
+            // - If this is the initial hydration and user didn't click Get Started,
+            //   do not redirect (stay on welcome)
+            // - If the user explicitly requested Auth (forceShowAuthRef) or the
+            //   current page is auth, navigate to dashboard after successful auth
+            // Only redirect away from auth after a *new* login event.
+            // If user was already authenticated and manually visited /SignIn,
+            // allow them to remain on the auth page.
+            if (!wasAuthedBefore) {
+              if (!wasInitial || forceShowAuthRef.current) {
+                if (currentPage === "auth" || forceShowAuthRef.current) {
+                  setCurrentPage("dashboard");
+                }
+              }
             }
           } else {
-            // No profile or incomplete profile - send to setup
-            if (justAuthenticated || currentPageRef.current === "auth") {
+            // No profile found. Only show setup when the last action was signup
+            // or the user explicitly requested the auth flow.
+            if (
+              lastAuthActionRef.current === "signup" ||
+              forceShowAuthRef.current
+            ) {
               setCurrentPage("setup");
+            } else {
+              // Default to dashboard
+              if (!wasAuthedBefore) {
+                if (!wasInitial || forceShowAuthRef.current)
+                  setCurrentPage("dashboard");
+              }
             }
           }
-        } catch (error) {
-          console.error("Error loading profile:", error);
-          if (justAuthenticated || currentPageRef.current === "auth") {
-            setCurrentPage("setup");
+        } catch (err) {
+          console.error("Error loading profile:", err);
+          if (!wasAuthedBefore) {
+            if (!wasInitial || forceShowAuthRef.current)
+              setCurrentPage("dashboard");
           }
         } finally {
           setIsLoadingProfile(false);
+          forceShowAuthRef.current = false;
+          lastAuthActionRef.current = null;
         }
       } else {
-        // User logged out
+        // Not authenticated
         setUserProfile(null);
         setWardrobeItems([]);
         setChatSessions([]);
         setCurrentChatSessionId(null);
-        // Always go to welcome page on logout
-        setCurrentPage("welcome");
+        if (!wasInitial) setCurrentPage("welcome");
       }
     });
     return () => unsub();
   }, []);
-
-  // --- Routing: map pages to URL paths and sync history ---
-  const pageToPath = (page: string) => {
-    switch (page) {
-      case "dashboard":
-        return "/Dashboard";
-      case "chat":
-        return "/AiChat";
-      case "assist":
-        return "/Wardrobe/Assist";
-      case "wardrobe":
-        return "/Wardrobe";
-      case "tips":
-        return "/Tips";
-      case "profile":
-        return "/Profile";
-      case "shopper":
-        return "/Shopper";
-      case "makeup":
-        return "/Makeup";
-      case "setup":
-        return "/ProfileSetup";
-      case "edit-profile":
-        return "/Profile/Edit";
-      case "tips":
-        return "/Tips";
-      case "profile-setup":
-        return "/ProfileSetup";
-      case "auth":
-        return "/SignIn";
-      case "signup":
-        return "/SignUp";
-      case "welcome":
-        return "/";
-      default:
-        return "/";
-    }
-  };
 
   const pathToPage = (path: string) => {
     const p = path.split("?")[0];
@@ -295,6 +249,39 @@ export default function App() {
     }
   };
 
+  const pageToPath = (page: string) => {
+    switch (page) {
+      case "dashboard":
+        return "/Dashboard";
+      case "chat":
+        return "/AiChat";
+      case "assist":
+        return "/Wardrobe/Assist";
+      case "wardrobe":
+        return "/Wardrobe";
+      case "tips":
+        return "/Tips";
+      case "profile":
+        return "/Profile";
+      case "shopper":
+        return "/Shopper";
+      case "makeup":
+        return "/Makeup";
+      case "setup":
+        return "/ProfileSetup";
+      case "edit-profile":
+        return "/Profile/Edit";
+      case "auth":
+        return "/SignIn";
+      case "signup":
+        return "/SignUp";
+      case "welcome":
+        return "/";
+      default:
+        return "/";
+    }
+  };
+
   // On mount, sync initial page from URL
   useEffect(() => {
     const initial = pathToPage(window.location.pathname || "/");
@@ -325,29 +312,38 @@ export default function App() {
   }, [currentPage]);
 
   const handleSignup = () => {
-    // Explicitly start the auth screen in sign-in mode when clicking Get Started
-    // and keep the Auth page visible even if the user is already authenticated.
+    // If already authenticated, go straight to dashboard and show a
+    // lightweight loading screen until initial data has loaded.
+    if (isAuthed) {
+      setShowLaunchLoading(true);
+      setCurrentPage("dashboard");
+      return;
+    }
+    // Otherwise, navigate to auth page in sign-in mode
     setAuthInitialMode("signin");
-    // Push a query param so the auth listener can detect the user's intent
-    // even if its callback runs concurrently. This makes the intent to
-    // show the Sign-in UI persistent across history navigation as well.
-    try {
-      if (typeof window !== "undefined") {
-        window.history.pushState({}, "", "/SignIn?forceAuth=true");
-      }
-    } catch (e) {}
-
-    forceShowAuthRef.current = true;
+    forceShowAuthRef.current = true; // treat as intentional auth navigation
     setCurrentPage("auth");
   };
 
-  // Clear the force-show flag when leaving the auth page so future auth
-  // listener events behave normally.
+  // Hide the launch loading overlay once we're on dashboard and initial
+  // data loads have finished.
   useEffect(() => {
-    if (currentPage !== "auth") {
-      forceShowAuthRef.current = false;
+    if (
+      showLaunchLoading &&
+      currentPage === "dashboard" &&
+      isAuthed &&
+      !isLoadingWardrobe &&
+      !isLoadingProfile
+    ) {
+      setShowLaunchLoading(false);
     }
-  }, [currentPage]);
+  }, [
+    showLaunchLoading,
+    currentPage,
+    isAuthed,
+    isLoadingWardrobe,
+    isLoadingProfile,
+  ]);
 
   const handleProfileComplete = (profile: UserProfile) => {
     setUserProfile(profile);
@@ -370,6 +366,9 @@ export default function App() {
         bodyType: profile.bodyType,
         skinTone: profile.skinTone,
         imageUrl: profile.photo,
+        email: profile.email,
+        region: profile.region,
+        favouriteColours: profile.favouriteColours,
       });
     } catch {}
     setUserProfile(profile);
@@ -513,12 +512,12 @@ export default function App() {
 
   // Initialize chat session when user navigates to chat page
 
-  // If the user is not authenticated and navigates away from allowed
-  // pages, redirect them to the auth page so they must sign in first.
+  // If the user is not authenticated and navigates to a protected page,
+  // redirect to auth. Importantly, we WAIT until authHydrated is true so
+  // we don't bounce to SignIn during a refresh while Firebase is restoring
+  // the session.
   useEffect(() => {
-    // Avoid redirecting while we're still initializing auth on mount.
-    if (!authInitialized) return;
-
+    if (!authHydrated) return;
     if (
       !isAuthed &&
       currentPage !== "welcome" &&
@@ -528,7 +527,7 @@ export default function App() {
     ) {
       setCurrentPage("auth");
     }
-  }, [isAuthed, currentPage, authInitialized]);
+  }, [authHydrated, isAuthed, currentPage]);
 
   const handleAddWardrobeItem = async (item: WardrobeItem) => {
     const userId = ensureUserId();
@@ -578,6 +577,10 @@ export default function App() {
             bodyType: p.bodyType || "",
             skinTone: p.skinTone || "",
             photo: p.imageUrl,
+            email: (p as any).email || undefined,
+            languagePref: (p as any).languagePref || undefined,
+            favouriteColours: (p as any).favouriteColours || [],
+            region: (p as any).region || "",
           };
           setUserProfile(mapped);
         }
@@ -788,36 +791,47 @@ export default function App() {
     );
   }
 
-  // While the auth system performs its initial hydration check (to detect a
-  // persisted signed-in user), show a small loading placeholder so we don't
-  // flash the Sign In page or redirect to dashboard on refresh.
-  if (!authInitialized) {
-    return (
-      <div className="min-h-screen flex items-center justify-center">
-        <div className="text-gray-500">Loading...</div>
-      </div>
-    );
-  }
-
   if (currentPage === "auth") {
-    // When the Auth component detects a successful authentication event,
-    // navigate to the dashboard — the global auth listener will redirect
-    // to profile setup if the user has no profile stored in Firebase.
+    // Show the auth page - the global listener will handle routing after auth
     return (
       <Auth
         initialMode={authInitialMode}
-        // When the welcome flow requested the Auth UI explicitly we want
-        // to avoid the Auth component auto-navigating away if a persisted
-        // session already exists. Pass the inverse of the forceShow flag
-        // so Auth can ignore the initial persisted-state callback.
-        allowAutoRedirect={!forceShowAuthRef.current}
-        onAuthenticated={() => setCurrentPage("dashboard")}
+        onAuthenticated={(mode) => {
+          // Remember whether the user just signed up or signed in. The
+          // auth listener will use this to decide whether to show the
+          // profile setup screen (only after signup) or go to dashboard.
+          console.log("Auth: Authentication successful, mode=", mode);
+          lastAuthActionRef.current = mode;
+          // The user explicitly performed an auth action (clicked sign-in/up)
+          // — ensure the global auth listener treats this as an interactive
+          // event and navigates away from the auth UI accordingly.
+          forceShowAuthRef.current = true;
+        }}
       />
     );
   }
 
   return (
     <div className="min-h-screen bg-gray-50">
+      {!authHydrated && (
+        <div className="fixed inset-0 z-40 flex flex-col items-center justify-center bg-gradient-to-br from-slate-900 via-rose-900 to-amber-900 text-white">
+          <div className="animate-pulse text-3xl mb-4">Loading ...</div>
+          <div className="w-48 h-2 bg-white/20 rounded overflow-hidden">
+            <div className="h-full w-1/3 bg-amber-300 animate-[loadingbar_1.2s_linear_infinite]"></div>
+          </div>
+        </div>
+      )}
+      {showLaunchLoading && (
+        <div className="fixed inset-0 z-50 flex flex-col items-center justify-center bg-gradient-to-br from-slate-900 via-rose-900 to-amber-900 text-white">
+          <div className="animate-pulse text-lg mb-4">
+            Loading your style dashboard...
+          </div>
+          <div className="w-48 h-2 bg-white/20 rounded overflow-hidden">
+            <div className="h-full w-1/3 bg-amber-300 animate-[loadingbar_1.2s_linear_infinite]"></div>
+          </div>
+          <style>{`@keyframes loadingbar { 0% { transform: translateX(-100%);} 100% { transform: translateX(300%);} }`}</style>
+        </div>
+      )}
       {currentPage === "welcome" && <WelcomePage onSignup={handleSignup} />}
 
       {currentPage === "setup" && (

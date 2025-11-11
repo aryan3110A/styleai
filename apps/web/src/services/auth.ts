@@ -40,10 +40,12 @@ export function onAuthUserChanged(cb: (user: User | null) => void) {
         const token = await user.getIdToken();
         localStorage.setItem('stylie_id_token', token);
         localStorage.setItem('stylie_uid', user.uid);
+        if (user.email) localStorage.setItem('stylie_email', user.email);
       } catch {}
     } else {
       localStorage.removeItem('stylie_id_token');
       localStorage.removeItem('stylie_uid');
+      try { localStorage.removeItem('stylie_email'); } catch {}
       // Also clear any fallback/local user id so API calls don't use a stale id
       try { localStorage.removeItem('stylie_user_id'); } catch {}
     }
@@ -63,6 +65,10 @@ export function getSavedIdToken(): string | undefined {
 
 export function getSavedUid(): string | undefined {
   try { return localStorage.getItem('stylie_uid') || undefined; } catch { return undefined; }
+}
+
+export function getSavedEmail(): string | undefined {
+  try { return localStorage.getItem('stylie_email') || undefined; } catch { return undefined; }
 }
 
 

@@ -123,7 +123,7 @@ export function Wardrobe({
                     <Label htmlFor="category">Category</Label>
                     <Select
                       value={newItem.category}
-                      onValueChange={(value :any) =>
+                      onValueChange={(value: any) =>
                         setNewItem({ ...newItem, category: value })
                       }
                     >
@@ -160,7 +160,7 @@ export function Wardrobe({
                           <img
                             src={imagePreview}
                             alt="Preview"
-                            className="w-full h-48 object-cover rounded-lg"
+                            className="w-full h-40 sm:h-48 md:h-56 lg:h-72 object-cover rounded-lg"
                           />
                           <button
                             onClick={() => {
@@ -244,7 +244,7 @@ export function Wardrobe({
                     <Label htmlFor="category">Category</Label>
                     <Select
                       value={newItem.category}
-                      onValueChange={(value:any) =>
+                      onValueChange={(value: any) =>
                         setNewItem({ ...newItem, category: value })
                       }
                     >
@@ -332,14 +332,17 @@ export function Wardrobe({
             {Object.entries(groupedItems).map(([category, categoryItems]) => (
               <div key={category}>
                 <h2 className="mb-4">{category}</h2>
-                <div className="flex grid-cols-4 gap-4">
+                <div className="grid grid-cols-2 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
                   {categoryItems.map((item) => (
-                    <Card key={item.id} className="overflow-hidden">
-                      <div className="relative">
+                    <Card
+                      key={item.id}
+                      className="overflow-hidden w-full items-center justify-center "
+                    >
+                      <div className="relative ">
                         <img
                           src={item.image}
                           alt={item.name}
-                          className="w-auto h-48 object-cover"
+                          className="w-auto h-48 items-center mt-4 object-center"
                         />
                         <button
                           onClick={() => onDeleteItem(item.id)}

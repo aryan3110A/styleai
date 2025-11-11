@@ -14,13 +14,16 @@ const API_BASE: string = (typeof import.meta !== 'undefined' && (import.meta as 
 
 export function ensureUserId(): string {
   try {
+    // New policy: if a Firebase UID is available, it is the canonical id.
     const authed = getSavedUid?.();
     if (authed) {
       localStorage.setItem('stylie_user_id', authed);
       return authed;
     }
+    // Otherwise fall back to previously stored local id (anonymous session)
     const existing = localStorage.getItem('stylie_user_id');
     if (existing) return existing;
+    // Or generate a local id for anonymous usage
     const id = `user_${Math.random().toString(36).slice(2, 10)}`;
     localStorage.setItem('stylie_user_id', id);
     return id;
@@ -123,7 +126,33 @@ export type UserProfileResponse = {
 };
 
 export async function getProfile(userId: string): Promise<UserProfileResponse> {
-  return request<UserProfileResponse>(`/api/profile/${encodeURIComponent(userId)}`);
+  try {
+    const primary = await request<UserProfileResponse>(`/api/profile/${encodeURIComponent(userId)}`);
+    // If the server explicitly returns not found, attempt fallback to Firebase UID
+    if (primary && (primary as any).error) {
+      const alt = getSavedUid?.();
+      if (alt && alt !== userId) {
+        try {
+          const secondary = await request<UserProfileResponse>(`/api/profile/${encodeURIComponent(alt)}`);
+          return secondary;
+        } catch {
+          // ignore and return primary
+        }
+      }
+    }
+    return primary;
+  } catch (err) {
+    // On network or 404-like error try fallback id if available
+    const alt = getSavedUid?.();
+    if (alt && alt !== userId) {
+      try {
+        return await request<UserProfileResponse>(`/api/profile/${encodeURIComponent(alt)}`);
+      } catch {
+        // fall through
+      }
+    }
+    throw err;
+  }
 }
 
 // Wardrobe
@@ -144,7 +173,40 @@ export type WardrobeResponse = {
 };
 
 export async function getWardrobe(userId: string): Promise<WardrobeResponse> {
-  return request<WardrobeResponse>(`/api/wardrobe/${encodeURIComponent(userId)}`);
+  try {
+    const primary = await request<WardrobeResponse>(`/api/wardrobe/${encodeURIComponent(userId)}`);
+    // If empty, try fallback Firebase UID
+    if ((!primary || (Array.isArray(primary.items) && primary.items.length === 0))) {
+      const alt = getSavedUid?.();
+      if (alt && alt !== userId) {
+        try {
+          const secondary = await request<WardrobeResponse>(`/api/wardrobe/${encodeURIComponent(alt)}`);
+          return secondary;
+        } catch {
+          // ignore and return primary
+        }
+      }
+    }
+    return primary;
+  } catch (err) {
+    const alt = getSavedUid?.();
+    if (alt && alt !== userId) {
+      try {
+        return await request<WardrobeResponse>(`/api/wardrobe/${encodeURIComponent(alt)}`);
+      } catch {
+        // fall through
+      }
+    }
+    throw err;
+  }
+}
+
+// Link a legacy local user id into the currently authenticated Firebase UID.
+export async function linkAccount(oldUserId: string, deleteOld?: boolean) {
+  return request('/api/account/link', {
+    method: 'POST',
+    body: JSON.stringify({ oldUserId, deleteOld: !!deleteOld }),
+  });
 }
 
 export async function deleteWardrobeItem(userId: string, itemId: string): Promise<{ success: boolean }> {

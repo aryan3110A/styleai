@@ -1,5 +1,6 @@
 import React, { useState } from "react";
 import { ensureUserId, saveProfile, uploadProfilePhoto } from "../services/api";
+import { getSavedEmail } from "../services/auth";
 import { User, Ruler, Users, UserCircle, Palette, Upload } from "lucide-react";
 import { Button } from "./ui/button";
 import { Input } from "./ui/input";
@@ -31,8 +32,15 @@ export function PersonalInfoSetup({
       gender: "",
       bodyType: "",
       skinTone: "",
+      favouriteColours: [],
+      region: "",
       photo: undefined,
     }
+  );
+
+  // Text input helper for comma-separated favourite colours
+  const [favColoursText, setFavColoursText] = useState<string>(
+    (initialProfile?.favouriteColours || []).join(", ")
   );
 
   const [photoPreview, setPhotoPreview] = useState<string>(
@@ -80,11 +88,26 @@ export function PersonalInfoSetup({
       bodyType: formData.bodyType,
       skinTone: formData.skinTone,
       imageUrl: photoUrl,
+      email: getSavedEmail(),
+      region: formData.region || undefined,
+      favouriteColours:
+        favColoursText.trim().length > 0
+          ? favColoursText
+              .split(",")
+              .map((c) => c.trim())
+              .filter((c) => c.length > 0)
+          : undefined,
     } as any;
     try {
       await saveProfile(payload);
     } catch {}
-    onComplete({ ...formData, photo: photoUrl || formData.photo });
+    const savedFav = payload.favouriteColours || [];
+    onComplete({
+      ...formData,
+      favouriteColours: savedFav,
+      region: payload.region,
+      photo: photoUrl || formData.photo,
+    });
   };
 
   const isFormValid =
@@ -211,7 +234,7 @@ export function PersonalInfoSetup({
               </Label>
               <Select
                 value={formData.gender}
-                onValueChange={(value) =>
+                onValueChange={(value: string) =>
                   setFormData({ ...formData, gender: value })
                 }
               >
@@ -240,7 +263,7 @@ export function PersonalInfoSetup({
               </Label>
               <Select
                 value={formData.bodyType}
-                onValueChange={(value) =>
+                onValueChange={(value: string) =>
                   setFormData({ ...formData, bodyType: value })
                 }
               >
@@ -268,7 +291,7 @@ export function PersonalInfoSetup({
               </Label>
               <Select
                 value={formData.skinTone}
-                onValueChange={(value) =>
+                onValueChange={(value: string) =>
                   setFormData({ ...formData, skinTone: value })
                 }
               >
@@ -283,6 +306,48 @@ export function PersonalInfoSetup({
                   <SelectItem value="tan">Tan</SelectItem>
                   <SelectItem value="brown">Brown</SelectItem>
                   <SelectItem value="dark">Dark</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+
+            {/* Favourite Colours */}
+            <div>
+              <Label
+                htmlFor="favColors"
+                className="flex items-center gap-2 mb-3"
+              >
+                <Palette className="w-4 h-4" />
+                Favourite Colours (comma separated)
+              </Label>
+              <Input
+                id="favColors"
+                type="text"
+                placeholder="e.g. blue, black, white"
+                value={favColoursText}
+                onChange={(e) => setFavColoursText(e.target.value)}
+              />
+            </div>
+
+            {/* Region (Zone) */}
+            <div>
+              <Label htmlFor="region" className="flex items-center gap-2 mb-3">
+                Region / Zone
+              </Label>
+              <Select
+                value={formData.region || ""}
+                onValueChange={(value: string) =>
+                  setFormData({ ...formData, region: value })
+                }
+              >
+                <SelectTrigger>
+                  <SelectValue placeholder="Select your region" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="North India">North India</SelectItem>
+                  <SelectItem value="South India">South India</SelectItem>
+                  <SelectItem value="East India">East India</SelectItem>
+                  <SelectItem value="Central India">Central India</SelectItem>
+                  <SelectItem value="West India">West India</SelectItem>
                 </SelectContent>
               </Select>
             </div>
