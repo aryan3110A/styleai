@@ -15,7 +15,12 @@ export const SYSTEM_PROMPT = `You are StylieAI, a friendly fashion & lifestyle c
 Critically: mirror the user's language and tone. If the user uses Hinglish/Hindi terms (even in Latin script), respond in natural Hinglish; if mostly English, reply in English. Do not overdo Hindi; keep it simple and conversational.
 When you give structured outfit guidance you may include a fenced JSON block: {"reply":"...","explain":"short why","tags":["casual"],"image_prompt":"short outfit description"}. Otherwise plain text is fine.`;
 
-export function buildMessages(profile: Partial<UserProfile>, message: string) {
+export interface PrevTurn {
+  userMessage?: string;
+  assistantReply?: string;
+}
+
+export function buildMessages(profile: Partial<UserProfile>, message: string, prevTurns: PrevTurn[] = []) {
   const lower = message.toLowerCase();
   // Detect Devanagari or common Hinglish tokens (word-level). Removed overly broad single 'h' token.
   const devanagari = /[\u0900-\u097F]/;
@@ -40,7 +45,22 @@ export function buildMessages(profile: Partial<UserProfile>, message: string) {
     ? 'Intent: fashion/style query. Provide help if explicitly asked; keep it concise and friendly.'
     : 'Intent: lifestyle / general chat.';
 
-  const profileStr = `User Profile\nHeight: ${profile.heightRange || 'n/a'}\nBody: ${profile.bodyType || 'n/a'}\nSkin: ${profile.skinTone || 'n/a'}\nFav Colours: ${(profile.favouriteColours || []).join(', ') || 'n/a'}\nRegion: ${profile.region || 'n/a'}\n---\n${languageInstruction}\n${intentInstruction}\nUser Message: ${message}`;
+  // Build a compact memory summary from previous turns to avoid repetition
+  const recent = prevTurns.slice(-4);
+  const lastAssistantLines = recent
+    .map(t => (t.assistantReply || '').trim())
+    .filter(Boolean);
+  const bannedPhrases = [
+    'anything exciting happen',
+    'how\'s your day going so far',
+    'more of a chill kind of day',
+    'anything exciting happening',
+  ];
+  const memorySummary = lastAssistantLines.length
+    ? `Recent assistant lines (avoid repeating these ideas/wording): ${lastAssistantLines.join(' | ')}. Strictly avoid phrases: ${bannedPhrases.join(' | ')}.`
+    : 'No prior assistant lines.';
+
+  const profileStr = `User Profile\nHeight: ${profile.heightRange || 'n/a'}\nBody: ${profile.bodyType || 'n/a'}\nSkin: ${profile.skinTone || 'n/a'}\nFav Colours: ${(profile.favouriteColours || []).join(', ') || 'n/a'}\nRegion: ${profile.region || 'n/a'}\n---\n${languageInstruction}\n${intentInstruction}\n${memorySummary}\nGuideline: Ask varied, specific follow-ups. Don\'t repeat the same greeting or \"anything exciting\" question. Reference the user\'s last message.\nUser Message: ${message}`;
   const messagesArr: Array<{ role: 'system' | 'user'; content: string }> = [
     { role: 'system', content: SYSTEM_PROMPT },
   ];
